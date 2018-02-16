@@ -41,8 +41,9 @@ double get_average(std::vector<int> vec, std::vector<int> map)
   double denominator = 0.0;
 
   for(int i = 0; i <= 8; i++){
-    if(map[i]){
+    if(!map[i]){
       sum += vec[i];
+      std::cout << "sum: " << sum << std::endl;
       std::cout << "denom: " << denominator << std::endl;
       denominator++;
     }
@@ -67,6 +68,8 @@ TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
     for(int j = 2; j <= 1199; j++){
 
       std::cout << "i: " << i << " j: " << j << std::endl;
+      neighbors.clear();
+      neighbor_map.clear();
 
       if(map->GetBinContent(i, j)){
 
