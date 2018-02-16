@@ -1,8 +1,10 @@
+using namespace std;
+
 double get_threshold(TH2S *dark, double significance)
 {
   int max_content = (int)dark->GetMaximum();
   
-  TH1D *amp_spectrum = new TH1D("amp_spectrum", "Pixel Intensity Spectrum", max_content, 0, max_content);
+  TH1D *amp_spectrum = new TH1D("amp_spectrum", "Intensity Spectrum; Intensity; Counts;", max_content, 0, max_content);
   
   for(int i = 1; i <= 1600; i++)
     for(int j = 1; j <= 1200; j++)
@@ -13,6 +15,8 @@ double get_threshold(TH2S *dark, double significance)
   
   double mean = gf->GetParameter(1);
   double sigma = gf->GetParameter(2);
+  
+  amp_spectrum->Delete();
 
   return mean + significance * sigma;
 }
@@ -20,8 +24,11 @@ double get_threshold(TH2S *dark, double significance)
 TH2S *hotpixel_map(TH2S *dark, double significance)
 { 
   double threshold = get_threshold(dark, significance);
- 
-  TH2S *map = new TH2S("hotpixel_map", "Hot Pixel Coordinates", 1600, 0, 1600, 1200, 0, 1200);
+  
+  if(gROOT->FindObject("hotpixel_map") != NULL)
+    gROOT->FindObject("hotpixel_map")->Delete();
+  
+  TH2S *map = new TH2S("hotpixel_map", "Hot Pixel Coordinates; x coordinate; y coordinate", 1600, 0, 1600, 1200, 0, 1200);
   
   for(int i = 1; i <= 1600; i++){
     for(int j = 1; j <= 1200; j++){
@@ -35,7 +42,7 @@ TH2S *hotpixel_map(TH2S *dark, double significance)
   return map;
 }
 
-double get_average(std::vector<int> vec, std::vector<int> map)
+double get_average(vector<int> vec, vector<int> map)
 {
   double sum = 0.0;
   double denominator = 0.0;
@@ -43,53 +50,62 @@ double get_average(std::vector<int> vec, std::vector<int> map)
   for(int i = 0; i <= 8; i++){
     if(!map[i]){
       sum += vec[i];
-      std::cout << "sum: " << sum << std::endl;
-      std::cout << "denom: " << denominator << std::endl;
       denominator++;
     }
   }
   
-  denominator += 1e-3;
-  std::cout << "denom: " << denominator << std::endl;
+  denominator += 1e-5;
+
   return sum / denominator;
 }
 
 TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
 {
   TH2S *moderated_data = (TH2S*)data->Clone();
-  TH2S *map = (TH2S*)hotpixel_map->Clone();
-  
-  std::vector<int> neighbors;
-  std::vector<int> neighbor_map;
-  
-  double average;
+
+  vector<int> neighbors;
+  vector<int> neighbor_map;
+  vector<vector<double>> sp_hot;
+
+  double avg;
 
   for(int i = 2; i <= 1599; i++){
     for(int j = 2; j <= 1199; j++){
 
-      std::cout << "i: " << i << " j: " << j << std::endl;
       neighbors.clear();
       neighbor_map.clear();
 
-      if(map->GetBinContent(i, j)){
+      if(hotpixel_map->GetBinContent(i, j)){
 
         for(int k = -1; k <= 1; k++){
           for(int l = -1; l <= 1; l++){
-            printf("%d %d \n", k, l);
-            std::cout << data->GetBinContent(i + k, j + l) << std::endl;
-            std::cout << map->GetBinContent(i + k, j + l) << std::endl;
             neighbors.push_back(data->GetBinContent(i + k, j + l));
-            neighbor_map.push_back(map->GetBinContent(i + k, j + l));
+            neighbor_map.push_back(hotpixel_map->GetBinContent(i + k, j + l));
           }
         }      
-      
-      average = get_average(neighbors, neighbor_map);
-      std::cout << "average: " << average << std::endl;
-      moderated_data->SetBinContent(i, j, average);
-      
+    avg = get_average(neighbors, neighbor_map);  
+    
+    if(avg == 0.0)
+      sp_hot.push_back({(double)i, (double)j, data->GetBinContent(i, j)});
+    else
+      moderated_data->SetBinContent(i, j, avg);
       }
     }
+  }
+  
+  int it = 0;
+  double sp_sum = 0.0;
+  for(vector<vector<double>>::iterator iter = sp_hot.begin(); iter != sp_hot.end(); ++iter){
+    sp_sum += sp_hot[it][2];
+    it++;
+  }
+
+  it = 0; 
+  for(vector<vector<double>>::iterator iter = sp_hot.begin(); iter != sp_hot.end(); ++iter){
+    moderated_data->SetBinContent(sp_hot[it][0], sp_hot[it][1], (moderated_data->Integral() - sp_sum) / (1600 * 1200));
+    it++;
   }
       
   return moderated_data;
 }
+
