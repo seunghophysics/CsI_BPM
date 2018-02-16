@@ -34,3 +34,59 @@ TH2S *hotpixel_map(TH2S *dark, double significance)
   
   return map;
 }
+
+double get_average(std::vector<int> vec, std::vector<int> map)
+{
+  double sum = 0.0;
+  double denominator = 0.0;
+
+  for(int i = 0; i <= 8; i++){
+    if(map[i]){
+      sum += vec[i];
+      std::cout << "denom: " << denominator << std::endl;
+      denominator++;
+    }
+  }
+  
+  denominator += 1e-3;
+  std::cout << "denom: " << denominator << std::endl;
+  return sum / denominator;
+}
+
+TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
+{
+  TH2S *moderated_data = (TH2S*)data->Clone();
+  TH2S *map = (TH2S*)hotpixel_map->Clone();
+  
+  std::vector<int> neighbors;
+  std::vector<int> neighbor_map;
+  
+  double average;
+
+  for(int i = 2; i <= 1599; i++){
+    for(int j = 2; j <= 1199; j++){
+
+      std::cout << "i: " << i << " j: " << j << std::endl;
+
+      if(map->GetBinContent(i, j)){
+
+        for(int k = -1; k <= 1; k++){
+          for(int l = -1; l <= 1; l++){
+            printf("%d %d \n", k, l);
+            std::cout << data->GetBinContent(i + k, j + l) << std::endl;
+            std::cout << map->GetBinContent(i + k, j + l) << std::endl;
+            neighbors.push_back(data->GetBinContent(i + k, j + l));
+            neighbor_map.push_back(map->GetBinContent(i + k, j + l));
+          }
+        }      
+      
+      average = get_average(neighbors, neighbor_map);
+      std::cout << "average: " << average << std::endl;
+      moderated_data->SetBinContent(i, j, average);
+      
+      }
+    }
+  }
+      
+  return moderated_data;
+}
