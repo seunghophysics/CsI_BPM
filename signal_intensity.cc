@@ -1,8 +1,21 @@
+#include "pco2root2x2.h"
+
 using namespace std;
 
-double get_threshold(TH2S *dark, double significance)
+TH2S *get_hist(const char *filename, const char *set_histname)
+{
+  TFile *f = TFile::Open(filename);
+  TH2S *hist = (TH2S*)f->Get("t1");
+  hist->SetName(set_histname);
+  return hist;
+}
+
+double get_threshold(TH2S *dark, double significance, bool draw_opt)
 {
   int max_content = (int)dark->GetMaximum();
+   
+  if(gROOT->FindObject("amp_spectrum") != NULL)
+    gROOT->FindObject("amp_spectrum")->Delete();
   
   TH1D *amp_spectrum = new TH1D("amp_spectrum", "Intensity Spectrum; Intensity; Counts;", max_content, 0, max_content);
   
@@ -16,14 +29,15 @@ double get_threshold(TH2S *dark, double significance)
   double mean = gf->GetParameter(1);
   double sigma = gf->GetParameter(2);
   
-  amp_spectrum->Delete();
+  if(draw_opt) 
+    amp_spectrum->Draw();
 
   return mean + significance * sigma;
 }
 
 TH2S *hotpixel_map(TH2S *dark, double significance)
 { 
-  double threshold = get_threshold(dark, significance);
+  double threshold = get_threshold(dark, significance, 0);
   
   if(gROOT->FindObject("hotpixel_map") != NULL)
     gROOT->FindObject("hotpixel_map")->Delete();
@@ -61,7 +75,10 @@ double get_average(vector<int> vec, vector<int> map)
 
 TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
 {
-  TH2S *moderated_data = (TH2S*)data->Clone();
+  if(gROOT->FindObject("moderated_data") != NULL)
+    gROOT->FindObject("moderated_data")->Delete();
+  
+  TH2S *moderated_data = (TH2S*)data->Clone("moderated_data");
 
   vector<int> neighbors;
   vector<int> neighbor_map;
@@ -109,3 +126,23 @@ TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
   return moderated_data;
 }
 
+TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, int end_biny)
+{  
+  if(gROOT->FindObject("cut_histogram") != NULL)
+    gROOT->FindObject("cut_histogram")->Delete();
+ 
+  TH2S *cut_histo = new TH2S("cut_histogram", "Cut Histogram; x coordinate; y coordinate", end_binx - start_binx + 1, start_binx - 1, end_binx, end_biny - start_biny + 1, start_biny - 1, end_biny);
+
+  int k, l;
+  k = 1;
+  for(int i = start_binx; i <= end_binx; i++){
+    l = 1;
+    for(int j = start_biny; j <= end_biny; j++){
+      cut_histo->SetBinContent(k, l, org_histo->GetBinContent(i, j));
+      l++;
+    }
+    k++;
+  }
+
+  return cut_histo;
+}
