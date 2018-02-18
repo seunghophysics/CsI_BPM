@@ -1,9 +1,11 @@
+// still in progress.
+
 #include "pco2root2x2.h"
 
 
 using namespace std;
 
-
+// Takes "t1" histogram out of a root file.
 TH2S *get_hist(const char *filename, const char *set_histname)
 {
   TFile *f = TFile::Open(filename);
@@ -12,7 +14,8 @@ TH2S *get_hist(const char *filename, const char *set_histname)
   return hist;
 }
 
-
+// Gets the threshold ADC value for determining whether a pixel is hot or not.
+// Draws the amplitude spectrum of the dark (or data) picture if draw_opt is TRUE.
 double get_threshold(TH2S *dark, double significance, bool draw_opt)
 {
   int max_content = (int)dark->GetMaximum();
@@ -38,7 +41,7 @@ double get_threshold(TH2S *dark, double significance, bool draw_opt)
   return mean + significance * sigma;
 }
 
-
+// Returns a 2D map of hot pixels, given a dark (or data) picture.
 TH2S *hotpixel_map(TH2S *dark, double significance)
 { 
   double threshold = get_threshold(dark, significance, 0);
@@ -60,7 +63,7 @@ TH2S *hotpixel_map(TH2S *dark, double significance)
   return map;
 }
 
-
+// Gives an average of neighboring non-hot pixels.
 double get_average(vector<int> vec, vector<int> map)
 {
   double sum = 0.0;
@@ -78,7 +81,7 @@ double get_average(vector<int> vec, vector<int> map)
   return sum / denominator;
 }
 
-
+// Returns a moderated data, given a hot pixel map.
 TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
 {
   if(gROOT->FindObject("moderated_data") != NULL)
@@ -132,7 +135,7 @@ TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
   return moderated_data;
 }
 
-
+// Returns a cut 2D histogram (a region of interest)
 TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, int end_biny)
 {  
   if(gROOT->FindObject("cut_histogram") != NULL)
@@ -154,7 +157,8 @@ TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, in
   return cut_histo;
 }
 
-
+// Calculates the signal intensity of a region of interest, given dark, data, and significance for hot pixels.
+// Example usage: intensity(get_hist("folder/file.root"), get_hist("folder/file.root"), 5, 400, 1200, 200, 600);
 double intensity(TH2S *data, TH2S *dark, double significance, int start_x, int end_x, int start_y, int end_y)
 {
   if(gROOT->FindObject("back_f") != NULL)
