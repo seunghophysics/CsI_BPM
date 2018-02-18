@@ -1,6 +1,8 @@
 #include "pco2root2x2.h"
 
+
 using namespace std;
+
 
 TH2S *get_hist(const char *filename, const char *set_histname)
 {
@@ -9,6 +11,7 @@ TH2S *get_hist(const char *filename, const char *set_histname)
   hist->SetName(set_histname);
   return hist;
 }
+
 
 double get_threshold(TH2S *dark, double significance, bool draw_opt)
 {
@@ -35,6 +38,7 @@ double get_threshold(TH2S *dark, double significance, bool draw_opt)
   return mean + significance * sigma;
 }
 
+
 TH2S *hotpixel_map(TH2S *dark, double significance)
 { 
   double threshold = get_threshold(dark, significance, 0);
@@ -56,6 +60,7 @@ TH2S *hotpixel_map(TH2S *dark, double significance)
   return map;
 }
 
+
 double get_average(vector<int> vec, vector<int> map)
 {
   double sum = 0.0;
@@ -72,6 +77,7 @@ double get_average(vector<int> vec, vector<int> map)
 
   return sum / denominator;
 }
+
 
 TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
 {
@@ -126,6 +132,7 @@ TH2S *moderate(TH2S *data, TH2S *hotpixel_map)
   return moderated_data;
 }
 
+
 TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, int end_biny)
 {  
   if(gROOT->FindObject("cut_histogram") != NULL)
@@ -147,6 +154,7 @@ TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, in
   return cut_histo;
 }
 
+
 double intensity(TH2S *data, TH2S *dark, double significance, int start_x, int end_x, int start_y, int end_y)
 {
   if(gROOT->FindObject("back_f") != NULL)
@@ -154,11 +162,12 @@ double intensity(TH2S *data, TH2S *dark, double significance, int start_x, int e
  
   TH2S *reg_interest = cut_hist(moderate(data, hotpixel_map(dark, significance)), start_x, end_x, start_y, end_y);
   TH1D *prj_x = reg_interest->ProjectionX("_px", 0, -1, "e");
-  cout << prj_x->GetMaximum() - prj_x->GetMinimum() << endl;
+  prj_x->GetYaxis()->SetTitle("Intensity (ADC counts)");
+ 
   TF1 *sig_back_f = new TF1("sig_back_f", "gaus(0) + pol2(3)", 0, 1600);
   TF1 *back_f = new TF1("back_f", "pol2", start_x - 1, end_x);
-  sig_back_f->SetParameters(prj_x->GetMaximum() - prj_x->GetMinimum(), start_x + prj_x->GetMaximumBin(), 50, prj_x->GetMinimum(), -10, -0.05);
 
+  sig_back_f->SetParameters(prj_x->GetMaximum() - prj_x->GetMinimum(), start_x + prj_x->GetMaximumBin(), 50, prj_x->GetMinimum(), -10, -0.05);
   sig_back_f->SetParLimits(0, 0, 5e4);
   sig_back_f->SetParLimits(1, start_x + prj_x->GetMaximumBin() - 10, start_x + prj_x->GetMaximumBin() + 10);
   sig_back_f->SetParLimits(2, 10, 1e2);
@@ -168,5 +177,6 @@ double intensity(TH2S *data, TH2S *dark, double significance, int start_x, int e
   prj_x->Fit("sig_back_f", "be");
   back_f->SetParameters(sig_back_f->GetParameter(3), sig_back_f->GetParameter(4), sig_back_f->GetParameter(5));
   back_f->Draw("same");
+
   return reg_interest->Integral(1, end_x - start_x + 1) - back_f->Integral(start_x - 1, end_x);
 }
