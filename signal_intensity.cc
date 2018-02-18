@@ -131,7 +131,7 @@ TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, in
   if(gROOT->FindObject("cut_histogram") != NULL)
     gROOT->FindObject("cut_histogram")->Delete();
  
-  TH2S *cut_histo = new TH2S("cut_histogram", "Cut Histogram; x coordinate; y coordinate", end_binx - start_binx + 1, start_binx - 1, end_binx, end_biny - start_biny + 1, start_biny - 1, end_biny);
+  TH2S *cut_histo = new TH2S("cut_histogram", "Cut Histogram; x coordinate; y coordinate;", end_binx - start_binx + 1, start_binx - 1, end_binx, end_biny - start_biny + 1, start_biny - 1, end_biny);
 
   int k, l;
   k = 1;
@@ -145,4 +145,28 @@ TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, in
   }
 
   return cut_histo;
+}
+
+double intensity(TH2S *data, TH2S *dark, double significance, int start_x, int end_x, int start_y, int end_y)
+{
+  if(gROOT->FindObject("back_f") != NULL)
+    gROOT->FindObject("back_f")->Delete();
+ 
+  TH2S *reg_interest = cut_hist(moderate(data, hotpixel_map(dark, significance)), start_x, end_x, start_y, end_y);
+  TH1D *prj_x = reg_interest->ProjectionX("_px", 0, -1, "e");
+  cout << prj_x->GetMaximum() - prj_x->GetMinimum() << endl;
+  TF1 *sig_back_f = new TF1("sig_back_f", "gaus(0) + pol2(3)", 0, 1600);
+  TF1 *back_f = new TF1("back_f", "pol2", start_x - 1, end_x);
+  sig_back_f->SetParameters(prj_x->GetMaximum() - prj_x->GetMinimum(), start_x + prj_x->GetMaximumBin(), 50, prj_x->GetMinimum(), -10, -0.05);
+
+  sig_back_f->SetParLimits(0, 0, 5e4);
+  sig_back_f->SetParLimits(1, start_x + prj_x->GetMaximumBin() - 10, start_x + prj_x->GetMaximumBin() + 10);
+  sig_back_f->SetParLimits(2, 10, 1e2);
+  sig_back_f->SetParLimits(4, 0, 5e1);
+  sig_back_f->SetParLimits(5, -5e-1, 0);
+
+  prj_x->Fit("sig_back_f", "be");
+  back_f->SetParameters(sig_back_f->GetParameter(3), sig_back_f->GetParameter(4), sig_back_f->GetParameter(5));
+  back_f->Draw("same");
+  return reg_interest->Integral(1, end_x - start_x + 1) - back_f->Integral(start_x - 1, end_x);
 }
