@@ -158,7 +158,7 @@ TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, in
 }
 
 // Calculates the signal intensity of a region of interest, given dark, data, and significance for hot pixels.
-// Example usage: intensity(get_hist("folder/file.root"), get_hist("folder/file.root"), 5, 400, 1200, 200, 600);
+// Example usage: intensity(get_hist("folder/file_data.root", "data"), get_hist("folder/file_dark.root", "dark"), 5, 400, 1200, 200, 600);
 double intensity(TH2S *data, TH2S *dark, double significance, int start_x, int end_x, int start_y, int end_y)
 {
   if(gROOT->FindObject("back_f") != NULL)
