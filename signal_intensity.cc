@@ -5,7 +5,7 @@
 
 using namespace std;
 
-// Takes "t1" histogram out of a root file.
+// Takes the "t1" histogram out of a root file.
 TH2S *get_hist(const char *filename, const char *set_histname)
 {
   TFile *f = TFile::Open(filename);
