@@ -1,9 +1,26 @@
 // still in progress.
 
+
 #include "pco2root2x2.h"
 
 
 using namespace std;
+
+
+// Sets error for each bin in input 2D histogram
+void set_error(TH2S *hist, double exp_time_min)
+{
+  double dc_err = 0.01 * exp_time_min * 60;
+  double ro_err = 11.0;
+  double sig_err;
+
+  for(int i = 1; i <= 1600; i++){
+    for(int j = 1; j <= 1200; j++){
+      sig_err = sqrt(hist->GetBinContent(i, j));
+      hist->SetBinError(i, j, sqrt(dc_err * dc_err + ro_err * ro_err + sig_err * sig_err));
+    }
+  }  
+ }
 
 // Takes the "t1" histogram out of a root file.
 TH2S *get_hist(const char *filename, const char *set_histname)
@@ -11,6 +28,7 @@ TH2S *get_hist(const char *filename, const char *set_histname)
   TFile *f = TFile::Open(filename);
   TH2S *hist = (TH2S*)f->Get("t1");
   hist->SetName(set_histname);
+
   return hist;
 }
 
@@ -159,28 +177,48 @@ TH2S *cut_hist(TH2S *org_histo, int start_binx, int end_binx, int start_biny, in
 
 // Calculates the signal intensity of a region of interest, given dark, data, and significance for hot pixels.
 // Example usage: intensity(get_hist("folder/file_data.root", "data"), get_hist("folder/file_dark.root", "dark"), 5, 400, 1200, 200, 600);
-double intensity(TH2S *data, TH2S *dark, double significance, int start_x, int end_x, int start_y, int end_y)
+double *intensity_and_error(TH2S *data, TH2S *dark, double significance, double exp_time_min, int start_x, int end_x, int start_y, int end_y)
 {
   if(gROOT->FindObject("back_f") != NULL)
     gROOT->FindObject("back_f")->Delete();
  
   TH2S *reg_interest = cut_hist(moderate(data, hotpixel_map(dark, significance)), start_x, end_x, start_y, end_y);
+  set_error(reg_interest, exp_time_min);
   TH1D *prj_x = reg_interest->ProjectionX("_px", 0, -1, "e");
   prj_x->GetYaxis()->SetTitle("Intensity (ADC counts)");
  
-  TF1 *sig_back_f = new TF1("sig_back_f", "gaus(0) + pol2(3)", 0, 1600);
+  TF1 *sig_back_f = new TF1("sig_back_f", "gaus(0) + pol2(3)", start_x - 1, end_x);
+  TF1 *sig_f = new TF1("sig_f", "gaus", start_x - 1, end_x);
   TF1 *back_f = new TF1("back_f", "pol2", start_x - 1, end_x);
-
+  
   sig_back_f->SetParameters(prj_x->GetMaximum() - prj_x->GetMinimum(), start_x + prj_x->GetMaximumBin(), 50, prj_x->GetMinimum(), -10, -0.05);
+
+  sig_back_f->SetParName(0, "Signal Amplitude");
+  sig_back_f->SetParName(1, "Signal Max Position");
+  sig_back_f->SetParName(2, "Signal Width (sigma)");
+  sig_back_f->SetParName(3, "Background Offset");
+  sig_back_f->SetParName(4, "Background 1st-or. Coeff.");
+  sig_back_f->SetParName(5, "Background 2st-or. Coeff.");
+
   sig_back_f->SetParLimits(0, 0, 5e4);
   sig_back_f->SetParLimits(1, start_x + prj_x->GetMaximumBin() - 10, start_x + prj_x->GetMaximumBin() + 10);
   sig_back_f->SetParLimits(2, 10, 1e2);
-  sig_back_f->SetParLimits(4, 0, 5e1);
   sig_back_f->SetParLimits(5, -5e-1, 0);
+ 
+  ROOT::Math::MinimizerOptions::SetDefaultMinimizer("Minuit2");
+  TFitResultPtr fit_result = prj_x->Fit("sig_back_f", "Sbe");
 
-  prj_x->Fit("sig_back_f", "be");
+  sig_f->SetParameters(sig_back_f->GetParameter(0), sig_back_f->GetParameter(1), sig_back_f->GetParameter(2));
+  sig_f->SetParError(0, sig_back_f->GetParError(0));
+  sig_f->SetParError(1, sig_back_f->GetParError(1));
+  sig_f->SetParError(2, sig_back_f->GetParError(2));
+
   back_f->SetParameters(sig_back_f->GetParameter(3), sig_back_f->GetParameter(4), sig_back_f->GetParameter(5));
   back_f->Draw("same");
 
-  return reg_interest->Integral(1, end_x - start_x + 1) - back_f->Integral(start_x - 1, end_x);
+  double *int_and_err = new double[2];
+  int_and_err[0] = sig_f->Integral(start_x - 1, end_x);
+  int_and_err[1] = sig_f->IntegralError(start_x - 1, end_x, 0, fit_result->GetCovarianceMatrix().GetSub(0, 2, 0, 2).GetMatrixArray()) + back_f->IntegralError(sig_f->GetParameter(1) - 3 * sig_f->GetParameter(2), sig_f->GetParameter(1) + sig_f->GetParameter(2), 0, fit_result->GetCovarianceMatrix().GetSub(3, 5, 3, 5).GetMatrixArray());
+
+  return int_and_err;
 }
